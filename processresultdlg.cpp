@@ -3,7 +3,7 @@
 #include <QGraphicsScene>
 #include <QPixmap>
 
-ProcessResultDlg::ProcessResultDlg(QWidget *parent) :
+ProcessResultDlg::ProcessResultDlg(QWidget *parent):
     QDialog(parent),
     ui(new Ui::ProcessResultDlg)
 {
@@ -26,6 +26,12 @@ void ProcessResultDlg::showResultImage(QImage* resultImage)
     scene->addPixmap(QPixmap::fromImage(*resultImage));
     ui->resultGraphicsView->setScene(scene);
     ui->resultGraphicsView->resize(resultImage->width() + 10, resultImage->height() + 10);
-    resize(resultImage->width() + 30,resultImage->height() + 30);
+    resize(resultImage->width() + 30,resultImage->height() + 50);
     ui->resultGraphicsView->show();
+    setWindowTitle(tr("处理结果"));
+}
+
+void ProcessResultDlg::editLabel(const QString string)
+{
+    ui->label->setText(string); //写内容
 }

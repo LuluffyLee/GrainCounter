@@ -18,10 +18,10 @@ public:
 
     QImage *resultImage;
     void showResultImage(QImage *);
+    void editLabel(const QString);
 
 private:
     Ui::ProcessResultDlg *ui;
-
 };
 
 #endif // PROCESSRESULTDLG_H

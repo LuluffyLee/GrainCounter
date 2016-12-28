@@ -13,17 +13,36 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
+  <property name="windowIcon">
+   <iconset resource="myresources.qrc">
+    <normaloff>:/images/counterIcon.ico</normaloff>:/images/counterIcon.ico</iconset>
+  </property>
   <widget class="QGraphicsView" name="resultGraphicsView">
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>10</y>
+     <y>30</y>
      <width>256</width>
      <height>192</height>
     </rect>
    </property>
   </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>10</y>
+     <width>251</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>TextLabel</string>
+   </property>
+  </widget>
  </widget>
- <resources/>
+ <resources>
+  <include location="myresources.qrc"/>
+ </resources>
  <connections/>
 </ui>

@@ -25,14 +25,17 @@ public:
 
 private slots:
     void open();
+    void save();
     void count();
     void about();
     void exit();
+    void rgbToGray();
+    void histogramEqualization();
 
 private:
     Ui::MainWindow *ui;
     QImage *image;
-    QImage *resultImage;
+    QPixmap *resultPixmap;
     QApplication* app;
     //ProcessResultDlg resultDlg;
     //QImage *MainWindow::greyScale(QImage *origin)();
