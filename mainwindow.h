@@ -4,6 +4,8 @@
 #include "processresultdlg.h"
 #include <QMainWindow>
 #include <QImage>
+#include <vector>
+using namespace std;
 
 namespace Ui {
 class MainWindow;
@@ -17,11 +19,9 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = 0);
     //MainWindow();
-
+    ProcessResultDlg resultDlg;
     void showImage(const QString &fileName);
     ~MainWindow();
-
-    ProcessResultDlg resultDlg;
 
 private slots:
     void open();
@@ -38,8 +38,9 @@ private:
     QImage *image;
     QImage resultImage;
     QApplication* app;
-    //ProcessResultDlg resultDlg;
-    //QImage *MainWindow::greyScale(QImage *origin)();
+    void showHistogram();
+    vector<int> histogram;
+    vector<int> Histogram(QImage *);
 };
 
 #endif // MAINWINDOW_H

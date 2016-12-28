@@ -16,6 +16,11 @@ MainWindow::MainWindow(QWidget *parent) :
     this->image = new QImage();
     statusBar()->showMessage(tr("就绪"));
 
+    ui->dockWidget->setFeatures(QDockWidget::DockWidgetMovable);
+    ui->dockWidget->setAllowedAreas(Qt::LeftDockWidgetArea|Qt::RightDockWidgetArea);
+    ui->dockWidget->setMinimumWidth(200);
+    ui->dockWidget->showMinimized();
+
     QObject::connect(ui->actionOpen,SIGNAL(triggered()),this,SLOT(open()));
     QObject::connect(ui->actionSave,SIGNAL(triggered()),this,SLOT(save()));
     QObject::connect(ui->actionExit,SIGNAL(triggered()),this,SLOT(exit()));
@@ -42,7 +47,11 @@ void MainWindow::open()
                 this,"open image file",".",
                 "Image files (*.bmp *.jpg *.pbm *.pgm *.png *.ppm *.xbm *.xpm);;All files (*.*)");
     if (!fileName.isEmpty())
+    {
         showImage(fileName);
+        showHistogram();
+        ui->dockWidget->showMinimized();
+    }
 }
 
 void MainWindow::save()
@@ -259,7 +268,7 @@ void MainWindow::showImage(const QString &fileName)
         scene->addPixmap(QPixmap::fromImage(*image));
         ui->graphicsView->setScene(scene);
         ui->graphicsView->resize(image->width() + 10, image->height() + 10);
-        resize(image->width() + 30,image->height() + 100);
+        resize(image->width() + 235,image->height() + 100);
         ui->graphicsView->show();
         //showImage(image);
 
@@ -268,4 +277,74 @@ void MainWindow::showImage(const QString &fileName)
     {
         statusBar()->showMessage(tr("加载失败"), 2000);
     }
+}
+
+void MainWindow::showHistogram()
+{
+    if(image->isNull())
+    {
+        return;
+    }
+    vector<int> count = Histogram(image);
+
+
+    histogram.resize(256);
+    for (int i=0;i!=256;i++)
+    {
+        histogram[i] = count[i];
+    }
+
+    std::vector<int> sortcount = count;
+    std::sort(sortcount.begin(),sortcount.end());
+    int maxcount = sortcount[sortcount.size()-1];
+
+
+    QImage* hist = new QImage(image->width(),image->height(),QImage::Format_RGB888);
+    QPainter p(hist);
+    hist->fill(qRgb(255,255,255));
+    p.translate(0,hist->height());
+
+
+    //p.drawLine(0,0,100,100);
+
+    int wid=hist->width();
+    int hei=hist->height();
+
+    //p.drawLine(10,-10,wid-10,-10);//横轴
+    //p.drawLine(10,-10,10,-hei+10);//纵轴
+
+    float xstep = float(wid) / 256;
+    float ystep = float(hei-20) / maxcount;
+
+    for (int i=0;i!=256;i++)
+    {
+
+        QColor color(i,255-i,0);
+        //p.setPen(Qt::blue);
+        //p.setBrush(Qt::blue);
+        p.setBrush(color);
+        p.setPen(color);
+        //p.drawLine(QPointF((i+0.5)*xstep,-ystep*count[i]),QPointF(10+(i+1.5)*xstep,-10-ystep*count[i+1]));
+        p.drawRect(i*xstep,0,xstep,-ystep*count[i]);
+    }
+    ui->hist->setPixmap(QPixmap::fromImage(hist->scaled(ui->hist->width(),ui->hist->height(),Qt::KeepAspectRatio)));
+}
+
+vector<int> MainWindow::Histogram(QImage* image)
+{
+    vector<int> hist(256);
+    QImage grayImg;
+    int width,height;
+    width=image->width();
+    height=image->height();
+    grayImg=QImage(width,height,QImage::Format_ARGB32);
+
+    for(int i=0; i<width; i++){
+        for(int j=0;j<height; j++){
+            QRgb pixel = image->pixel(i,j);
+            int gray = qGray(pixel);
+            hist[gray] = hist[gray]+1;
+        }
+    }
+    return hist;
 }
