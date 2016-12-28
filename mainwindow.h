@@ -30,6 +30,7 @@ private slots:
     void about();
     void exit();
     void rgbToGray();
+    void binarization();
     void histogramEqualization();
 
 private:

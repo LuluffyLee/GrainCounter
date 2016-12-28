@@ -22,6 +22,7 @@ MainWindow::MainWindow(QWidget *parent) :
     QObject::connect(ui->actionCount,SIGNAL(triggered()),this,SLOT(count()));    
     QObject::connect(ui->actionAbout,SIGNAL(triggered()),this,SLOT(about()));
     QObject::connect(ui->actionGray,SIGNAL(triggered()),this,SLOT(rgbToGray()));
+    QObject::connect(ui->actionBinarization,SIGNAL(triggered()),this,SLOT(binarization()));
     QObject::connect(ui->actionHistogramEqualization,SIGNAL(triggered()),this,SLOT(histogramEqualization()));
 }
 
@@ -51,7 +52,8 @@ void MainWindow::save()
         QString fileName = QFileDialog::getSaveFileName(
                     this,"open image file",".",
                     "BMP file (*.bmp);;JPEG file (*.jpg);;PNG file (*.png);;All files (*.*)");
-        if (!fileName.isEmpty()){
+        if (!fileName.isEmpty())
+        {
             statusBar()->showMessage(tr("保存中..."));
             resultImage.save(fileName);
             statusBar()->showMessage(tr("保存成功"));
@@ -80,6 +82,37 @@ void MainWindow::count()
     }
 }
 
+//二值化
+void MainWindow::binarization()
+{
+    if(!this->image->isNull())
+    {
+        int width,height;
+        width=image->width();
+        height=image->height();
+        resultImage=QImage(width,height,QImage::Format_ARGB32);
+
+        for(int i=0; i<width; i++){
+            for(int j=0;j<height; j++){
+                QRgb pixel = image->pixel(i,j);
+                int gray = (qGray(pixel)> 100) ? 255 : 0;
+                QRgb grayPixel = qRgb(gray,gray,gray);
+                resultImage.setPixel(i,j,grayPixel);
+            }
+        }
+
+        QString string = tr("二值化图像");
+        resultDlg.editLabel(string);
+        resultDlg.showResultImage(&resultImage);
+        resultDlg.show();
+    }else
+    {
+        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),
+                             QMessageBox::Yes, QMessageBox::Yes);
+    }
+    //BinaryArray[i,j] = Convert.ToByte((GrayArray[i,j] > threshold) ? 255 : 0);
+}
+
 //灰度图像
 void MainWindow::rgbToGray()
 {
@@ -88,7 +121,6 @@ void MainWindow::rgbToGray()
         int width,height;
         width=image->width();
         height=image->height();
-        //QImage ImageGray;
         resultImage=QImage(width,height,QImage::Format_ARGB32);
 
         for(int i=0; i<width; i++){
@@ -117,12 +149,10 @@ void MainWindow::histogramEqualization()
     statusBar()->showMessage(tr("处理中..."));
     if(!this->image->isNull())
     {
-
         int i,j;
         int width,height;
         width=image->width();
         height=image->height();
-        //QImage ImageAverage;
         resultImage=QImage(width,height,QImage::Format_ARGB32);
         QRgb rgb;
         int r[256],g[256],b[256];//原图各个灰度数量的统计

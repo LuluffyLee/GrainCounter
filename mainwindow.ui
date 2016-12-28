@@ -54,7 +54,9 @@
     </property>
     <addaction name="actionGray"/>
     <addaction name="actionHistogramEqualization"/>
+    <addaction name="separator"/>
     <addaction name="actionCount"/>
+    <addaction name="actionBinarization"/>
    </widget>
    <widget class="QMenu" name="menu_H">
     <property name="title">
@@ -138,6 +140,17 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+H</string>
+   </property>
+  </action>
+  <action name="actionBinarization">
+   <property name="text">
+    <string>二值化(&amp;B)</string>
+   </property>
+   <property name="toolTip">
+    <string>二值化(&amp;B)</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+B</string>
    </property>
   </action>
  </widget>
