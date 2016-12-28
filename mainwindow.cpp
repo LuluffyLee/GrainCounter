@@ -46,11 +46,22 @@ void MainWindow::open()
 
 void MainWindow::save()
 {
-    QString fileName = QFileDialog::getOpenFileName(
-                this,"open image file",".",
-                "Image files (*.bmp *.jpg *.pbm *.pgm *.png *.ppm *.xbm *.xpm);;All files (*.*)");
-    if (!fileName.isEmpty())
-        showImage(fileName);
+    if(!resultImage.isNull())
+    {
+        QString fileName = QFileDialog::getSaveFileName(
+                    this,"open image file",".",
+                    "BMP file (*.bmp);;JPEG file (*.jpg);;PNG file (*.png);;All files (*.*)");
+        if (!fileName.isEmpty()){
+            statusBar()->showMessage(tr("保存中..."));
+            resultImage.save(fileName);
+            statusBar()->showMessage(tr("保存成功"));
+        }
+    }else
+    {
+        QMessageBox::warning(this,tr("waring"),tr("无处理结果"),
+                             QMessageBox::Yes, QMessageBox::Yes);
+    }
+
 }
 
 //计数
@@ -64,7 +75,8 @@ void MainWindow::count()
         resultDlg.show();
     }else
     {
-        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),QMessageBox::Yes, QMessageBox::Yes);
+        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),
+                             QMessageBox::Yes, QMessageBox::Yes);
     }
 }
 
@@ -76,25 +88,26 @@ void MainWindow::rgbToGray()
         int width,height;
         width=image->width();
         height=image->height();
-        QImage ImageGray;
-        ImageGray=QImage(width,height,QImage::Format_ARGB32);
+        //QImage ImageGray;
+        resultImage=QImage(width,height,QImage::Format_ARGB32);
 
         for(int i=0; i<width; i++){
             for(int j=0;j<height; j++){
                 QRgb pixel = image->pixel(i,j);
                 int gray = qGray(pixel);
                 QRgb grayPixel = qRgb(gray,gray,gray);
-                ImageGray.setPixel(i,j,grayPixel);
+                resultImage.setPixel(i,j,grayPixel);
             }
         }
 
         QString string = tr("灰度图像");
         resultDlg.editLabel(string);
-        resultDlg.showResultImage(&ImageGray);
+        resultDlg.showResultImage(&resultImage);
         resultDlg.show();
     }else
     {
-        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),QMessageBox::Yes, QMessageBox::Yes);
+        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),
+                             QMessageBox::Yes, QMessageBox::Yes);
     }
 }
 
@@ -109,8 +122,8 @@ void MainWindow::histogramEqualization()
         int width,height;
         width=image->width();
         height=image->height();
-        QImage ImageAverage;
-        ImageAverage=QImage(width,height,QImage::Format_ARGB32);
+        //QImage ImageAverage;
+        resultImage=QImage(width,height,QImage::Format_ARGB32);
         QRgb rgb;
         int r[256],g[256],b[256];//原图各个灰度数量的统计
         int rtmp,gtmp,btmp,rj,gj,bj;
@@ -172,24 +185,26 @@ void MainWindow::histogramEqualization()
                 rj=rJun[rtmp];
                 gj=gJun[gtmp];
                 bj=bJun[btmp];
-                ImageAverage.setPixel(i,j,qRgb(rj,gj,bj));
+                resultImage.setPixel(i,j,qRgb(rj,gj,bj));
             }
         }
 
         statusBar()->showMessage(tr("处理完成"));
         QString string = tr("直方图均衡化图像");
         resultDlg.editLabel(string);
-        resultDlg.showResultImage(&ImageAverage);
+        resultDlg.showResultImage(&resultImage);
         resultDlg.show();
     }else
     {
-        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),QMessageBox::Yes, QMessageBox::Yes);
+        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),
+                             QMessageBox::Yes, QMessageBox::Yes);
     }
 }
 
 void MainWindow::exit()
 {
-    if (!(QMessageBox::information(this,tr("退出"),tr("确定退出吗？"),tr("Yes"),tr("No"))))
+    if (!(QMessageBox::information(this,tr("退出"),
+                                   tr("确定退出吗？"),tr("Yes"),tr("No"))))
     {
         app->exit(0);
     }

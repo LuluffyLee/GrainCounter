@@ -94,7 +94,7 @@
      <normaloff>:/images/save.png</normaloff>:/images/save.png</iconset>
    </property>
    <property name="text">
-    <string>保存(&amp;S)</string>
+    <string>保存处理结果(&amp;S)</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+S</string>

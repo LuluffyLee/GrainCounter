@@ -35,7 +35,7 @@ private slots:
 private:
     Ui::MainWindow *ui;
     QImage *image;
-    QPixmap *resultPixmap;
+    QImage resultImage;
     QApplication* app;
     //ProcessResultDlg resultDlg;
     //QImage *MainWindow::greyScale(QImage *origin)();
