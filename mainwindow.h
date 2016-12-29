@@ -2,8 +2,10 @@
 #define MAINWINDOW_H
 
 #include "processresultdlg.h"
+#include "math.h"
 #include <QMainWindow>
 #include <QImage>
+//#include <QDebug>
 #include <vector>
 #include <opencv2/opencv.hpp>
 using namespace std;
@@ -27,12 +29,15 @@ public:
 private slots:
     void open();
     void save();
-    void count();
+    void autoCount();
+    void manualCount();
     void about();
     void exit();
-    void Erode();
+    void sharpen();
+    void blur();
     void rgbToGray();
-    void binarization();
+    void manualBinarization();
+    void otsuBinarization();
     void histogramEqualization();
 
 private:
@@ -43,8 +48,10 @@ private:
     void showHistogram();
     vector<int> histogram;
     vector<int> Histogram(QImage *);
-    int chooseThreshold();
-    cv::Mat imgToMat(QImage *);
+    int chooseThresholdbyOtsu();
+    void getSizeContours(vector<vector<cv::Point>> &);
+    cv::Mat QImageToMat(QImage &);
+    QImage MatToQImage(cv::Mat &);
 };
 
 #endif // MAINWINDOW_H

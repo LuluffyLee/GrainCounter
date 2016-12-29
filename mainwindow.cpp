@@ -24,12 +24,15 @@ MainWindow::MainWindow(QWidget *parent) :
     QObject::connect(ui->actionOpen,SIGNAL(triggered()),this,SLOT(open()));
     QObject::connect(ui->actionSave,SIGNAL(triggered()),this,SLOT(save()));
     QObject::connect(ui->actionExit,SIGNAL(triggered()),this,SLOT(exit()));
-    QObject::connect(ui->actionCount,SIGNAL(triggered()),this,SLOT(count()));    
+    QObject::connect(ui->actionAutoCount,SIGNAL(triggered()),this,SLOT(autoCount()));
+    QObject::connect(ui->actionManualCount,SIGNAL(triggered()),this,SLOT(manualCount()));
     QObject::connect(ui->actionAbout,SIGNAL(triggered()),this,SLOT(about()));
     QObject::connect(ui->actionGray,SIGNAL(triggered()),this,SLOT(rgbToGray()));
-    QObject::connect(ui->actionBinarization,SIGNAL(triggered()),this,SLOT(binarization()));
+    QObject::connect(ui->actionSharpen,SIGNAL(triggered()),this,SLOT(sharpen()));
+    QObject::connect(ui->actionBlur,SIGNAL(triggered()),this,SLOT(blur()));
+    QObject::connect(ui->actionManual,SIGNAL(triggered()),this,SLOT(manualBinarization()));
+    QObject::connect(ui->actionOtsu,SIGNAL(triggered()),this,SLOT(otsuBinarization()));
     QObject::connect(ui->actionHistogramEqualization,SIGNAL(triggered()),this,SLOT(histogramEqualization()));
-    QObject::connect(ui->actionErode,SIGNAL(triggered()),this,SLOT(Erode()));
 }
 
 MainWindow::~MainWindow()
@@ -76,14 +79,78 @@ void MainWindow::save()
 
 }
 
-//计数
-void MainWindow::count()
+//QImageToMat
+cv::Mat MainWindow:: QImageToMat(QImage& image)
+{
+    cv::Mat mat;
+    //cv::cvtColor(mat, mat, CV_BGR2RGB);
+        //qDebug() << image.format();
+        switch(image.format())
+        {
+        case QImage::Format_ARGB32:
+        case QImage::Format_RGB32:
+        case QImage::Format_ARGB32_Premultiplied:
+            mat = cv::Mat(image.height(), image.width(), CV_8UC4, (uchar*)image.bits(), image.bytesPerLine());
+            break;
+        case QImage::Format_RGB888:
+            mat = cv::Mat(image.height(), image.width(), CV_8UC3, (void*)image.constBits(), image.bytesPerLine());
+            cv::cvtColor(mat, mat, CV_BGR2RGB);
+            break;
+        case QImage::Format_Indexed8:
+            mat = cv::Mat(image.height(), image.width(), CV_8UC1, (void*)image.constBits(), image.bytesPerLine());
+            break;
+        }
+    cv::Mat dst =mat;
+    cvtColor(mat,dst,CV_BGR2GRAY);
+    return dst;
+}
+
+//MatToQImage
+QImage MainWindow::MatToQImage(cv::Mat& InputMat)
+{
+    cv::Mat TmpMat;
+    // convert the color space to RGB
+    if (InputMat.channels() == 1)
+    {
+        cv::cvtColor(InputMat, TmpMat, CV_GRAY2RGB);
+    }else
+    {
+        cv::cvtColor(InputMat, TmpMat, CV_BGR2RGB);
+    }
+    // construct the QImage using the data of the mat, while do not copy the data
+    QImage Result = QImage((const uchar*)(TmpMat.data),
+                           TmpMat.cols, TmpMat.rows,
+                           TmpMat.cols*TmpMat.channels(),//非常重要，不然结果会扭曲
+                           QImage::Format_RGB888);
+    // deep copy the data from mat to QImage
+    Result.bits();
+    return Result;
+}
+
+//auto阈值计数
+void MainWindow::autoCount()
 {
     if(!this->image->isNull())
     {
-        QString string = tr("计数结果");
+        statusBar()->showMessage(tr("处理中..."));
+        //todo：count
+        cv::Mat resultImage = QImageToMat(*image);
+        cv::Mat imageShold;
+        threshold(resultImage, imageShold, chooseThresholdbyOtsu(), 255, CV_THRESH_BINARY);   // 必须进行二值化
+        vector<vector<cv::Point>> contours;
+        //CV_CHAIN_APPROX_NONE  获取每个轮廓每个像素点
+        findContours(imageShold, contours, CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE, cvPoint(0, 0));
+        getSizeContours(contours);
+
+
+        drawContours(imageShold,contours,-1,cv::Scalar(125),2);//画出边缘
+
+        //end count
+        statusBar()->showMessage(tr("处理完成"));
+        QString string =tr("计数结果：");
+        string.append(QString::number(contours.size()));
         resultDlg.editLabel(string);
-        resultDlg.showResultImage(image);
+        resultDlg.showResultImage(&MatToQImage(imageShold));
         resultDlg.show();
     }else
     {
@@ -92,11 +159,61 @@ void MainWindow::count()
     }
 }
 
-//二值化
-void MainWindow::binarization()
+//manual阈值计数
+void MainWindow::manualCount()
 {
     if(!this->image->isNull())
     {
+        statusBar()->showMessage(tr("处理中..."));
+        //todo：count
+        cv::Mat resultImage = QImageToMat(*image);
+        cv::Mat imageShold;
+        threshold(resultImage, imageShold, ui->lcdThreshold->value(), 255, CV_THRESH_BINARY);   // 必须进行二值化
+        vector<vector<cv::Point>> contours;
+        //CV_CHAIN_APPROX_NONE  获取每个轮廓每个像素点
+        findContours(imageShold, contours, CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE, cvPoint(0, 0));
+        getSizeContours(contours);
+
+        drawContours(imageShold,contours,-1,cv::Scalar(125),2);//画出边缘
+
+        //end count
+        statusBar()->showMessage(tr("处理完成"));
+        QString string =tr("计数结果：");
+        string.append(QString::number(contours.size()));
+        resultDlg.editLabel(string);
+        resultDlg.showResultImage(&MatToQImage(imageShold));
+        resultDlg.show();
+    }else
+    {
+        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),
+                             QMessageBox::Yes, QMessageBox::Yes);
+    }
+}
+
+// 移除过小或过大的轮廓
+void MainWindow::getSizeContours(vector<vector<cv::Point>> &contours)
+{
+    int cmin = 10;   // 最小轮廓长度
+    int cmax = 1000;   // 最大轮廓长度
+    vector<vector<cv::Point>>::const_iterator itc = contours.begin();
+    while (itc != contours.end())
+    {
+        if ((itc->size()) < cmin
+            || (itc->size()) > cmax
+            )
+        {
+            itc = contours.erase(itc);
+        }
+        else ++itc;
+    }
+}
+
+//manual二值化
+void MainWindow::manualBinarization()
+{
+    if(!this->image->isNull())
+    {
+        statusBar()->showMessage(tr("处理中..."));
         int width,height;
         width=image->width();
         height=image->height();
@@ -111,8 +228,45 @@ void MainWindow::binarization()
                 resultImage.setPixel(i,j,grayPixel);
             }
         }
-
+        statusBar()->showMessage(tr("处理完成"));
         QString string = tr("二值化图像");
+        resultDlg.editLabel(string);
+        resultDlg.showResultImage(&resultImage);
+        resultDlg.show();
+    }else
+    {
+        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),
+                             QMessageBox::Yes, QMessageBox::Yes);
+    }
+    //BinaryArray[i,j] = Convert.ToByte((GrayArray[i,j] > threshold) ? 255 : 0);
+}
+
+//otsu二值化
+void MainWindow::otsuBinarization()
+{
+    if(!this->image->isNull())
+    {
+        statusBar()->showMessage(tr("处理中..."));
+        int width,height;
+        width=image->width();
+        height=image->height();
+        resultImage=QImage(width,height,QImage::Format_ARGB32);
+        int threshold=0;
+        threshold=chooseThresholdbyOtsu();
+        for(int i=0; i<width; i++){
+            for(int j=0;j<height; j++){
+                QRgb pixel = image->pixel(i,j);
+                //int gray = (qGray(pixel)> ui->lcdThreshold->value()) ? 255 : 0;
+                int gray = (qGray(pixel)>threshold ) ? 255 : 0;
+                QRgb grayPixel = qRgb(gray,gray,gray);
+                resultImage.setPixel(i,j,grayPixel);
+                //BinaryArray[i,j]=gray;
+            }
+        }
+        statusBar()->showMessage(tr("处理完成"));
+
+        QString string = tr("自适应二值化图像,阈值为：");
+        string.append(QString::number(threshold));
         resultDlg.editLabel(string);
         resultDlg.showResultImage(&resultImage);
         resultDlg.show();
@@ -135,7 +289,7 @@ void MainWindow::rgbToGray()
     }
     if(!this->image->isNull())
     {
-
+        statusBar()->showMessage(tr("处理中..."));
         int width,height;
         width=image->width();
         height=image->height();
@@ -149,7 +303,7 @@ void MainWindow::rgbToGray()
                 resultImage.setPixel(i,j,grayPixel);
             }
         }
-
+        statusBar()->showMessage(tr("处理完成"));
         QString string = tr("灰度图像");
         resultDlg.editLabel(string);
         resultDlg.showResultImage(&resultImage);
@@ -163,10 +317,10 @@ void MainWindow::rgbToGray()
 
 //直方图均衡化
 void MainWindow::histogramEqualization()
-{
-    statusBar()->showMessage(tr("处理中..."));
+{    
     if(!this->image->isNull())
     {
+        statusBar()->showMessage(tr("处理中..."));
         int i,j;
         int width,height;
         width=image->width();
@@ -272,7 +426,6 @@ void MainWindow::showImage(const QString &fileName)
     if(image->load(fileName))
     {
         statusBar()->showMessage(tr("加载中..."));
-
         QGraphicsScene *scene = new QGraphicsScene;
         scene->addPixmap(QPixmap::fromImage(*image));
         ui->graphicsView->setScene(scene);
@@ -280,7 +433,6 @@ void MainWindow::showImage(const QString &fileName)
         resize(image->width() + 235,image->height() + 100);
         ui->graphicsView->show();
         //showImage(image);
-
         statusBar()->showMessage(tr("加载完成"), 2000);
     }else
     {
@@ -356,111 +508,142 @@ vector<int> MainWindow::Histogram(QImage* image)
     return hist;
 }
 
-// erode image
-void MainWindow::Erode(){
-    cv::Mat srcImage=imgToMat(image);
-    //cv::Mat element = getStructuringElement(cv::MORPH_RECT, cv::Size(15,15));
-    cv::Mat dstImage;
-    //erode(srcImage, dstImage,NULL);
-}
-
-int MainWindow::chooseThreshold()
+int MainWindow::chooseThresholdbyOtsu()
 {
-    int width = image->width();
-    int height = image->height();
-    int x=0,y=0;
-    int pixelCount[256];
-    float pixelPro[256];
-    int i, j, pixelSum = width * height, threshold = 0;
+    double omega[256];//到第k个灰度值的总像素数
+    double mu[256];//到第k个灰度值的总灰度和
 
-    uchar* data = (uchar*)image->bits();
-
-    //初始化
-    for(i = 0; i < 256; i++)
+    omega[0] = (double)histogram[0];
+    mu[0] = 0;
+    for(int i = 1; i < 256; i++)
     {
-        pixelCount[i] = 0;
-        pixelPro[i] = 0;
+        omega[i] = omega[i-1] +(double) histogram[i]; //累积分布函数
+        mu[i] = mu[i-1] + i *(double) histogram[i];
     }
-
-    //统计灰度级中每个像素在整幅图像中的个数
-    for(i = y; i < height; i++)
+    double mean = mu[255]/omega[255];// 灰度平均值
+    double max = 0;
+    int k_max = 0;
+    for(int k = 1; k < 255; k++)
     {
-        for(j = x;j <width;j++)
+        double PA = omega[k]/omega[255]; // A类所占的比例
+        double PB = 1 - omega[k]/omega[255]; //B类所占的比例
+        double value = 0;
+        if( fabs(PA) > 0.001 && fabs(PB) > 0.001)
         {
-            pixelCount[data[i * image->widthMM() + j]]++;
-        }
-    }
+            double MA = mu[k] / omega[k]; //A 类的灰度均值
+            double MB = (mu[255] - mu[k]) /(omega[255]-omega[k]);//B类灰度均值
+            value = PA * (MA - mean) * (MA - mean) + PB * (MB - mean) * (MB - mean);//类间方差
 
-
-    //计算每个像素在整幅图像中的比例
-    for(i = 0; i < 256; i++)
-    {
-        pixelPro[i] = (float)(pixelCount[i]) / (float)(pixelSum);
-    }
-
-    //经典ostu算法,得到前景和背景的分割
-    //遍历灰度级[0,255],计算出方差最大的灰度值,为最佳阈值
-    float w0, w1, u0tmp, u1tmp, u0, u1, u,deltaTmp, deltaMax = 0;
-    for(i = 0; i < 256; i++)
-    {
-        w0 = w1 = u0tmp = u1tmp = u0 = u1 = u = deltaTmp = 0;
-
-        for(j = 0; j < 256; j++)
-        {
-            if(j <= i) //背景部分
+            if (value > max)
             {
-                //以i为阈值分类，第一类总的概率
-                w0 += pixelPro[j];
-                u0tmp += j * pixelPro[j];
-            }
-            else       //前景部分
-            {
-                //以i为阈值分类，第二类总的概率
-                w1 += pixelPro[j];
-                u1tmp += j * pixelPro[j];
+                max = value;
+                k_max = k;
             }
         }
-
-        u0 = u0tmp / w0;        //第一类的平均灰度
-        u1 = u1tmp / w1;        //第二类的平均灰度
-        u = u0tmp + u1tmp;      //整幅图像的平均灰度
-        //计算类间方差
-        deltaTmp = w0 * (u0 - u)*(u0 - u) + w1 * (u1 - u)*(u1 - u);
-        //找出最大类间方差以及对应的阈值
-        if(deltaTmp > deltaMax)
-        {
-            deltaMax = deltaTmp;
-            threshold = i;
-        }
+        //qDebug() <<k << " " << histogram[k] << " " << value<<k_max;
     }
-    //返回最佳阈值;
-    return threshold;
-    //return 0;
+    ui->lcdThreshold->display(k_max);
+    ui->hSliderThreshold->setValue(k_max);
+    return k_max;
 }
 
-cv::Mat MainWindow::imgToMat(QImage *image)
-{
-    int width,height;
-    width=image->width();
-    height=image->height();
-    QImage grayImage=QImage(width,height,QImage::Format_ARGB32);
+//锐化
+void MainWindow::sharpen(){
+    if(!this->image->isNull())
+    {
+        statusBar()->showMessage(tr("处理中..."));
+        QImage * newImage = new QImage(* image);
 
-    for(int i=0; i<width; i++){
-        for(int j=0;j<height; j++){
-            QRgb pixel = image->pixel(i,j);
-            int gray = qGray(pixel);
-            QRgb grayPixel = qRgb(gray,gray,gray);
-            grayImage.setPixel(i,j,grayPixel);
+        int kernel [3][3]= {{0,-1,0},
+                            {-1,5,-1},
+                            {0,-1,0}};
+        int kernelSize = 3;
+        int sumKernel = 1;
+        int r,g,b;
+        QColor color;
+
+        for(int x=kernelSize/2; x<newImage->width()-(kernelSize/2); x++){
+            for(int y=kernelSize/2; y<newImage->height()-(kernelSize/2); y++){
+
+                r = 0;
+                g = 0;
+                b = 0;
+
+                for(int i = -kernelSize/2; i<= kernelSize/2; i++){
+                    for(int j = -kernelSize/2; j<= kernelSize/2; j++){
+                        color = QColor(image->pixel(x+i, y+j));
+                        r += color.red()*kernel[kernelSize/2+i][kernelSize/2+j];
+                        g += color.green()*kernel[kernelSize/2+i][kernelSize/2+j];
+                        b += color.blue()*kernel[kernelSize/2+i][kernelSize/2+j];
+                    }
+                }
+
+                r = qBound(0, r/sumKernel, 255);
+                g = qBound(0, g/sumKernel, 255);
+                b = qBound(0, b/sumKernel, 255);
+
+                newImage->setPixel(x,y, qRgb(r,g,b));
+            }
         }
+        statusBar()->showMessage(tr("处理完成"));
+        QString string = tr("锐化图像");
+        resultDlg.editLabel(string);
+        resultDlg.showResultImage(newImage);
+        resultDlg.show();}else
+    {
+        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),
+                             QMessageBox::Yes, QMessageBox::Yes);
     }
-    //qDebug()<<image.format();
-    cv::Mat mat = cv::Mat(grayImage.height(),grayImage.width(),
-                          CV_8UC1, (uchar*)grayImage.bits(), grayImage.bytesPerLine());
-//    cv::Mat mat2 = cv::Mat(mat.rows, mat.cols, CV_8UC1 );
-//    int from_to[] = {0,0,1,1,2,2};
-//    cv::mixChannels(&mat,1,&mat2,1,from_to,1);
-    //namedWindow("QImage2Mat");
-    //imshow("QImage2Mat",mat2);
-    return mat;
 }
 
+//模糊
+void MainWindow::blur(){
+    if(!this->image->isNull())
+    {
+        statusBar()->showMessage(tr("处理中..."));
+        QImage * newImage = new QImage(* image);
+
+        int kernel [5][5]= {{0,0,1,0,0},
+                            {0,1,3,1,0},
+                            {1,3,7,3,1},
+                            {0,1,3,1,0},
+                            {0,0,1,0,0}};
+        int kernelSize = 5;
+        int sumKernel = 27;
+        int r,g,b;
+        QColor color;
+
+        for(int x=kernelSize/2; x<newImage->width()-(kernelSize/2); x++){
+            for(int y=kernelSize/2; y<newImage->height()-(kernelSize/2); y++){
+
+                r = 0;
+                g = 0;
+                b = 0;
+
+                for(int i = -kernelSize/2; i<= kernelSize/2; i++){
+                    for(int j = -kernelSize/2; j<= kernelSize/2; j++){
+                        color = QColor(image->pixel(x+i, y+j));
+                        r += color.red()*kernel[kernelSize/2+i][kernelSize/2+j];
+                        g += color.green()*kernel[kernelSize/2+i][kernelSize/2+j];
+                        b += color.blue()*kernel[kernelSize/2+i][kernelSize/2+j];
+                    }
+                }
+
+                r = qBound(0, r/sumKernel, 255);
+                g = qBound(0, g/sumKernel, 255);
+                b = qBound(0, b/sumKernel, 255);
+
+                newImage->setPixel(x,y, qRgb(r,g,b));
+
+            }
+        }
+        statusBar()->showMessage(tr("处理完成"));
+        QString string = tr("模糊图像");
+        resultDlg.editLabel(string);
+        resultDlg.showResultImage(newImage);
+        resultDlg.show();}else
+    {
+        QMessageBox::warning(this,tr("waring"),tr("未打开图片"),
+                             QMessageBox::Yes, QMessageBox::Yes);
+    }
+}
