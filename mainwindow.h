@@ -5,6 +5,7 @@
 #include <QMainWindow>
 #include <QImage>
 #include <vector>
+#include <opencv2/opencv.hpp>
 using namespace std;
 
 namespace Ui {
@@ -29,6 +30,7 @@ private slots:
     void count();
     void about();
     void exit();
+    void Erode();
     void rgbToGray();
     void binarization();
     void histogramEqualization();
@@ -41,6 +43,8 @@ private:
     void showHistogram();
     vector<int> histogram;
     vector<int> Histogram(QImage *);
+    int chooseThreshold();
+    cv::Mat imgToMat(QImage *);
 };
 
 #endif // MAINWINDOW_H

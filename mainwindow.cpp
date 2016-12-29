@@ -29,6 +29,7 @@ MainWindow::MainWindow(QWidget *parent) :
     QObject::connect(ui->actionGray,SIGNAL(triggered()),this,SLOT(rgbToGray()));
     QObject::connect(ui->actionBinarization,SIGNAL(triggered()),this,SLOT(binarization()));
     QObject::connect(ui->actionHistogramEqualization,SIGNAL(triggered()),this,SLOT(histogramEqualization()));
+    QObject::connect(ui->actionErode,SIGNAL(triggered()),this,SLOT(Erode()));
 }
 
 MainWindow::~MainWindow()
@@ -44,7 +45,7 @@ MainWindow::~MainWindow()
 void MainWindow::open()
 {
     QString fileName = QFileDialog::getOpenFileName(
-                this,"open image file",".",
+                this,"打开图片",".",
                 "Image files (*.bmp *.jpg *.pbm *.pgm *.png *.ppm *.xbm *.xpm);;All files (*.*)");
     if (!fileName.isEmpty())
     {
@@ -59,7 +60,7 @@ void MainWindow::save()
     if(!resultImage.isNull())
     {
         QString fileName = QFileDialog::getSaveFileName(
-                    this,"open image file",".",
+                    this,"保存处理结果",".",
                     "BMP file (*.bmp);;JPEG file (*.jpg);;PNG file (*.png);;All files (*.*)");
         if (!fileName.isEmpty())
         {
@@ -104,7 +105,8 @@ void MainWindow::binarization()
         for(int i=0; i<width; i++){
             for(int j=0;j<height; j++){
                 QRgb pixel = image->pixel(i,j);
-                int gray = (qGray(pixel)> 100) ? 255 : 0;
+                int gray = (qGray(pixel)> ui->lcdThreshold->value()) ? 255 : 0;
+                //int gray = (qGray(pixel)> chooseThreshold()) ? 255 : 0;
                 QRgb grayPixel = qRgb(gray,gray,gray);
                 resultImage.setPixel(i,j,grayPixel);
             }
@@ -125,8 +127,15 @@ void MainWindow::binarization()
 //灰度图像
 void MainWindow::rgbToGray()
 {
+    if(image->isGrayscale())
+    {
+        QMessageBox::warning(this,tr("waring"),tr("已经是灰度图像"),
+                             QMessageBox::Yes, QMessageBox::Yes);
+        return;
+    }
     if(!this->image->isNull())
     {
+
         int width,height;
         width=image->width();
         height=image->height();
@@ -279,6 +288,7 @@ void MainWindow::showImage(const QString &fileName)
     }
 }
 
+//显示直方图
 void MainWindow::showHistogram()
 {
     if(image->isNull())
@@ -286,7 +296,6 @@ void MainWindow::showHistogram()
         return;
     }
     vector<int> count = Histogram(image);
-
 
     histogram.resize(256);
     for (int i=0;i!=256;i++)
@@ -298,18 +307,16 @@ void MainWindow::showHistogram()
     std::sort(sortcount.begin(),sortcount.end());
     int maxcount = sortcount[sortcount.size()-1];
 
-
-    QImage* hist = new QImage(image->width(),image->height(),QImage::Format_RGB888);
+    QImage* hist = new QImage(ui->hist->geometry().width(),ui->hist->geometry().height(),QImage::Format_RGB888);
     QPainter p(hist);
     hist->fill(qRgb(255,255,255));
     p.translate(0,hist->height());
-
 
     //p.drawLine(0,0,100,100);
 
     int wid=hist->width();
     int hei=hist->height();
-
+    //ui->hist->geometry().width()
     //p.drawLine(10,-10,wid-10,-10);//横轴
     //p.drawLine(10,-10,10,-hei+10);//纵轴
 
@@ -348,3 +355,112 @@ vector<int> MainWindow::Histogram(QImage* image)
     }
     return hist;
 }
+
+// erode image
+void MainWindow::Erode(){
+    cv::Mat srcImage=imgToMat(image);
+    //cv::Mat element = getStructuringElement(cv::MORPH_RECT, cv::Size(15,15));
+    cv::Mat dstImage;
+    //erode(srcImage, dstImage,NULL);
+}
+
+int MainWindow::chooseThreshold()
+{
+    int width = image->width();
+    int height = image->height();
+    int x=0,y=0;
+    int pixelCount[256];
+    float pixelPro[256];
+    int i, j, pixelSum = width * height, threshold = 0;
+
+    uchar* data = (uchar*)image->bits();
+
+    //初始化
+    for(i = 0; i < 256; i++)
+    {
+        pixelCount[i] = 0;
+        pixelPro[i] = 0;
+    }
+
+    //统计灰度级中每个像素在整幅图像中的个数
+    for(i = y; i < height; i++)
+    {
+        for(j = x;j <width;j++)
+        {
+            pixelCount[data[i * image->widthMM() + j]]++;
+        }
+    }
+
+
+    //计算每个像素在整幅图像中的比例
+    for(i = 0; i < 256; i++)
+    {
+        pixelPro[i] = (float)(pixelCount[i]) / (float)(pixelSum);
+    }
+
+    //经典ostu算法,得到前景和背景的分割
+    //遍历灰度级[0,255],计算出方差最大的灰度值,为最佳阈值
+    float w0, w1, u0tmp, u1tmp, u0, u1, u,deltaTmp, deltaMax = 0;
+    for(i = 0; i < 256; i++)
+    {
+        w0 = w1 = u0tmp = u1tmp = u0 = u1 = u = deltaTmp = 0;
+
+        for(j = 0; j < 256; j++)
+        {
+            if(j <= i) //背景部分
+            {
+                //以i为阈值分类，第一类总的概率
+                w0 += pixelPro[j];
+                u0tmp += j * pixelPro[j];
+            }
+            else       //前景部分
+            {
+                //以i为阈值分类，第二类总的概率
+                w1 += pixelPro[j];
+                u1tmp += j * pixelPro[j];
+            }
+        }
+
+        u0 = u0tmp / w0;        //第一类的平均灰度
+        u1 = u1tmp / w1;        //第二类的平均灰度
+        u = u0tmp + u1tmp;      //整幅图像的平均灰度
+        //计算类间方差
+        deltaTmp = w0 * (u0 - u)*(u0 - u) + w1 * (u1 - u)*(u1 - u);
+        //找出最大类间方差以及对应的阈值
+        if(deltaTmp > deltaMax)
+        {
+            deltaMax = deltaTmp;
+            threshold = i;
+        }
+    }
+    //返回最佳阈值;
+    return threshold;
+    //return 0;
+}
+
+cv::Mat MainWindow::imgToMat(QImage *image)
+{
+    int width,height;
+    width=image->width();
+    height=image->height();
+    QImage grayImage=QImage(width,height,QImage::Format_ARGB32);
+
+    for(int i=0; i<width; i++){
+        for(int j=0;j<height; j++){
+            QRgb pixel = image->pixel(i,j);
+            int gray = qGray(pixel);
+            QRgb grayPixel = qRgb(gray,gray,gray);
+            grayImage.setPixel(i,j,grayPixel);
+        }
+    }
+    //qDebug()<<image.format();
+    cv::Mat mat = cv::Mat(grayImage.height(),grayImage.width(),
+                          CV_8UC1, (uchar*)grayImage.bits(), grayImage.bytesPerLine());
+//    cv::Mat mat2 = cv::Mat(mat.rows, mat.cols, CV_8UC1 );
+//    int from_to[] = {0,0,1,1,2,2};
+//    cv::mixChannels(&mat,1,&mat2,1,from_to,1);
+    //namedWindow("QImage2Mat");
+    //imshow("QImage2Mat",mat2);
+    return mat;
+}
+
