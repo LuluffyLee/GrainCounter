@@ -255,7 +255,10 @@
   </action>
   <action name="actionBlur">
    <property name="text">
-    <string>模糊(&amp;B)</string>
+    <string>平滑(&amp;B)</string>
+   </property>
+   <property name="toolTip">
+    <string>平滑(B)</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+B</string>
